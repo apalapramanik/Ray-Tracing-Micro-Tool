@@ -144,6 +144,40 @@
       </div>
     </div>
 
+    <!-- TX Antenna -->
+    <div class="control-group">
+      <div class="control-group-title">TX Antenna</div>
+      <div class="compact-row">
+        <label>X</label><input id="tx-x" type="number" step="1" placeholder="—">
+        <label>Y</label><input id="tx-y" type="number" step="1" placeholder="—">
+      </div>
+      <div class="compact-row">
+        <label>Boresight°</label><input id="tx-boresight" type="number" step="1" value="270">
+        <label></label><span style="font-size:9px;color:var(--muted);">0=E 90=S 180=W 270=N</span>
+      </div>
+      <div class="btn-grid-2" style="margin-top:4px;">
+        <button id="placeTxInputBtn">⊕ Place from XY</button>
+        <button id="placeTxClickBtn">✛ Click canvas</button>
+      </div>
+    </div>
+
+    <!-- RX Antenna -->
+    <div class="control-group">
+      <div class="control-group-title">RX Antenna</div>
+      <div class="compact-row">
+        <label>X</label><input id="rx-x" type="number" step="1" placeholder="—">
+        <label>Y</label><input id="rx-y" type="number" step="1" placeholder="—">
+      </div>
+      <div class="compact-row">
+        <label>Boresight°</label><input id="rx-boresight" type="number" step="1" value="270">
+        <label></label><span style="font-size:9px;color:var(--muted);">0=E 90=S 180=W 270=N</span>
+      </div>
+      <div class="btn-grid-2" style="margin-top:4px;">
+        <button id="placeRxInputBtn">⊕ Place from XY</button>
+        <button id="placeRxClickBtn">✛ Click canvas</button>
+      </div>
+    </div>
+
     <!-- Selected Wall Properties (shown only in edit mode when a plain wall is selected) -->
     <div class="control-group" id="wallPropsPanel" style="display:none;border-color:rgba(58,143,212,0.5);">
       <div class="control-group-title" style="color:#8fd4ff;">Selected Wall</div>
@@ -428,7 +462,7 @@
   // so that the editor's condition is always easy to inspect in one place.
 
   let walls = [];             // Array of all wall/shape segments (see Data Model above)
-  let mode  = 'drawWall';    // Current editor mode: 'drawWall' | 'editWall' | 'deleteWall' | 'placeShape'
+  let mode  = 'drawWall';    // Current editor mode: 'drawWall' | 'editWall' | 'deleteWall' | 'placeShape' | 'placeTx' | 'placeRx'
   let wallDraft = null;       // The in-progress wall being drawn (null when not drawing)
   let drag  = null;           // Active drag operation: { kind, wallIndex, ... } or null
   let activeShape = null;     // Shape type selected for placement: 'square' | 'rectangle' | etc., or null
@@ -436,6 +470,11 @@
   let hoveredWallIndex = null;    // Index of wall under the cursor (for highlight + tooltip)
   let shapeCounter = 0;           // Auto-incrementing ID for shape groups
   let selectedWallIndex = null;   // Index of the wall selected in Edit mode (plain walls only)
+
+  // TX and RX antenna positions. null = not yet placed.
+  // Each is: { x, y, boresight } where boresight is degrees (0=East, 90=South, 180=West, 270=North)
+  let txPos = null;
+  let rxPos = null;
 
   // ==========================================================================
   // SECTION 2 — MATH HELPERS
@@ -976,7 +1015,62 @@
       }
     }
 
-    statsEl.textContent=`Walls: ${walls.length}`;
+    // Draw TX marker (cyan) and RX marker (orange) with boresight arrows
+    function drawAntenna(pos, label, color, previewPos) {
+      const p = previewPos || pos;
+      if (!p) return;
+      const { x, y, boresight } = p;
+      const boresightRad = rad(boresight);
+      const arrowLen = 40;
+
+      ctx.save();
+
+      // Boresight direction arrow (dashed line)
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 3]);
+      ctx.globalAlpha = previewPos ? 0.5 : 0.85;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(boresightRad) * arrowLen, y + Math.sin(boresightRad) * arrowLen);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Filled circle marker
+      ctx.globalAlpha = previewPos ? 0.5 : 1.0;
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Label inside the circle
+      ctx.fillStyle = '#0b0f14';
+      ctx.font = 'bold 9px ui-monospace,monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x, y);
+
+      // Coordinate label below
+      ctx.fillStyle = color;
+      ctx.font = '9px ui-monospace,monospace';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`(${Math.round(x)}, ${Math.round(y)})`, x, y + 12);
+
+      ctx.restore();
+    }
+
+    // Draw real positions
+    drawAntenna(txPos, 'TX', '#00d4ff');
+    drawAntenna(rxPos, 'RX', '#ffaa22');
+
+    // Draw ghost preview when in place mode
+    if (mode === 'placeTx') drawAntenna({ x: mousePos.x, y: mousePos.y, boresight: parseFloat(document.getElementById('tx-boresight').value) || 270 }, 'TX', '#00d4ff', true);
+    if (mode === 'placeRx') drawAntenna({ x: mousePos.x, y: mousePos.y, boresight: parseFloat(document.getElementById('rx-boresight').value) || 270 }, 'RX', '#ffaa22', true);
+
+    statsEl.textContent = `Walls: ${walls.length}${txPos ? '  · TX ✓' : ''}${rxPos ? '  · RX ✓' : ''}`;
     const gv=parseFloat(gridSel.value)||0;
     gridScaleEl.textContent=gv?`${gv} px`:'Off';
   }
@@ -1000,6 +1094,20 @@
   canvas.addEventListener('mousedown', ev => {
     const {x,y}=canvasToLocal(ev);
 
+    if (mode === 'placeTx') {
+      txPos = { x, y, boresight: parseFloat(document.getElementById('tx-boresight').value) || 270 };
+      syncAntennaInputs();
+      setMode('drawWall');
+      draw();
+      return;
+    }
+    if (mode === 'placeRx') {
+      rxPos = { x, y, boresight: parseFloat(document.getElementById('rx-boresight').value) || 270 };
+      syncAntennaInputs();
+      setMode('drawWall');
+      draw();
+      return;
+    }
     if(mode==='placeShape' && activeShape){
       const segs = generateSegs(activeShape, x, y);
       walls.push(...segs);
@@ -1067,7 +1175,7 @@
     cursorCoords.textContent=`x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`;
     cursorCoords.style.left=tx+'px'; cursorCoords.style.top=ty+'px';
 
-    if(mode==='placeShape'){ draw(); return; }
+    if(mode==='placeShape'||mode==='placeTx'||mode==='placeRx'){ draw(); return; }
 
     // Hover detection
     const prevHovered = hoveredWallIndex;
@@ -1138,11 +1246,11 @@
   function setMode(m) {
     mode=m;
     if (m !== 'editWall') selectWall(null);
-    canvas.style.cursor = m==='deleteWall'?'not-allowed':m==='placeShape'?'crosshair':m==='drawWall'?'crosshair':'default';
+    canvas.style.cursor = m==='deleteWall'?'not-allowed':m==='placeShape'||m==='placeTx'||m==='placeRx'?'crosshair':m==='drawWall'?'crosshair':'default';
     document.getElementById('modeDrawWall').style.outline  = m==='drawWall'  ?'2px solid #3a5878':'none';
     document.getElementById('modeEditWall').style.outline  = m==='editWall'  ?'2px solid #3a5878':'none';
     document.getElementById('modeDeleteWall').style.outline= m==='deleteWall'?'2px solid #3a5878':'none';
-    const labels = {drawWall:'Draw Wall mode',editWall:'Edit mode — drag walls/endpoints',deleteWall:'Delete — click a wall to remove',placeShape:`Place ${activeShape||''} — click canvas`};
+    const labels = {drawWall:'Draw Wall mode',editWall:'Edit mode — drag walls/endpoints',deleteWall:'Delete — click a wall to remove',placeShape:`Place ${activeShape||''} — click canvas`,placeTx:'Click canvas to place TX',placeRx:'Click canvas to place RX'};
     modeLabel.textContent = labels[m] || m;
     if(m!=='placeShape'){ document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active')); }
   }
@@ -1291,9 +1399,72 @@
   // Redraw preview when shape params change
   document.querySelectorAll('.param-section input').forEach(el=>el.addEventListener('input', ()=>{ if(mode==='placeShape') draw(); }));
 
+  // ── TX / RX antenna controls ─────────────────────────────────────────────
+
+  // Push current txPos/rxPos values into the left-panel input fields
+  function syncAntennaInputs() {
+    if (txPos) {
+      document.getElementById('tx-x').value = Math.round(txPos.x * 10) / 10;
+      document.getElementById('tx-y').value = Math.round(txPos.y * 10) / 10;
+      document.getElementById('tx-boresight').value = txPos.boresight;
+    }
+    if (rxPos) {
+      document.getElementById('rx-x').value = Math.round(rxPos.x * 10) / 10;
+      document.getElementById('rx-y').value = Math.round(rxPos.y * 10) / 10;
+      document.getElementById('rx-boresight').value = rxPos.boresight;
+    }
+  }
+
+  // "Place from XY" buttons — read current input values and place immediately
+  document.getElementById('placeTxInputBtn').addEventListener('click', () => {
+    const x = parseFloat(document.getElementById('tx-x').value);
+    const y = parseFloat(document.getElementById('tx-y').value);
+    const b = parseFloat(document.getElementById('tx-boresight').value) || 270;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { alert('Enter X and Y coordinates for TX first.'); return; }
+    txPos = { x, y, boresight: b };
+    draw();
+  });
+  document.getElementById('placeRxInputBtn').addEventListener('click', () => {
+    const x = parseFloat(document.getElementById('rx-x').value);
+    const y = parseFloat(document.getElementById('rx-y').value);
+    const b = parseFloat(document.getElementById('rx-boresight').value) || 270;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { alert('Enter X and Y coordinates for RX first.'); return; }
+    rxPos = { x, y, boresight: b };
+    draw();
+  });
+
+  // "Click canvas" buttons — enter placement mode
+  document.getElementById('placeTxClickBtn').addEventListener('click', () => setMode('placeTx'));
+  document.getElementById('placeRxClickBtn').addEventListener('click', () => setMode('placeRx'));
+
+  // Live-update position and boresight when inputs are typed
+  ['tx-x','tx-y','tx-boresight'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      const x = parseFloat(document.getElementById('tx-x').value);
+      const y = parseFloat(document.getElementById('tx-y').value);
+      const b = parseFloat(document.getElementById('tx-boresight').value) || 270;
+      if (Number.isFinite(x) && Number.isFinite(y)) { txPos = { x, y, boresight: b }; draw(); }
+      else if (txPos) { txPos.boresight = b; draw(); } // boresight-only change
+    });
+  });
+  ['rx-x','rx-y','rx-boresight'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      const x = parseFloat(document.getElementById('rx-x').value);
+      const y = parseFloat(document.getElementById('rx-y').value);
+      const b = parseFloat(document.getElementById('rx-boresight').value) || 270;
+      if (Number.isFinite(x) && Number.isFinite(y)) { rxPos = { x, y, boresight: b }; draw(); }
+      else if (rxPos) { rxPos.boresight = b; draw(); }
+    });
+  });
+
   // ── File ─────────────────────────────────────────────────────────────────
   document.getElementById('saveJsonBtn').addEventListener('click', ()=>{
-    const blob=new Blob([JSON.stringify({version:1,walls},null,2)],{type:'application/json'});
+    // Build the output object — include tx/rx only if they have been placed
+    const out = { version: 1 };
+    if (txPos) out.tx = { x: Math.round(txPos.x * 10) / 10, y: Math.round(txPos.y * 10) / 10, boresight_deg: txPos.boresight };
+    if (rxPos) out.rx = { x: Math.round(rxPos.x * 10) / 10, y: Math.round(rxPos.y * 10) / 10, boresight_deg: rxPos.boresight };
+    out.walls = walls;
+    const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url; a.download=`floorplan_${Date.now()}.json`; a.click();
@@ -1307,8 +1478,14 @@
     reader.onload=e=>{
       try{
         const data=JSON.parse(e.target.result);
-        if(Array.isArray(data.walls)){walls=data.walls;draw();}
-        else alert('Invalid floorplan JSON');
+        if(Array.isArray(data.walls)){
+          walls = data.walls;
+          // Restore TX/RX positions if present in the file
+          txPos = data.tx ? { x: data.tx.x, y: data.tx.y, boresight: data.tx.boresight_deg ?? 270 } : null;
+          rxPos = data.rx ? { x: data.rx.x, y: data.rx.y, boresight: data.rx.boresight_deg ?? 270 } : null;
+          syncAntennaInputs();
+          draw();
+        } else alert('Invalid floorplan JSON');
       }catch{alert('Could not parse JSON file');}
       loadInput.value='';
     };
