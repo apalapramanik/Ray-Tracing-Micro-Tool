@@ -22,6 +22,8 @@ Ray Tracing Micro Tool processes 63×63 TX/RX beam-sweep data from mmWave antenn
 An example experiment and its generated report are included in [`example_experiment/`](example_experiment/).  
 Open [`example_experiment.html`](example_experiment/example_experiment.html) directly in a browser to see the tool in action.
 
+![Ray Tracing Micro Tool — interactive report preview](preview.png)
+
 ---
 
 ## Requirements
