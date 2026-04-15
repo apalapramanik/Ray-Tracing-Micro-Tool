@@ -26,6 +26,22 @@ Open [`example_experiment.html`](example_experiment/example_experiment.html) dir
 
 ---
 
+## File Descriptions
+
+| File | Purpose |
+|------|---------|
+| [`raytrace.py`](raytrace.py) | **CLI entry point.** The only script you run directly. Accepts two subcommands: `report` (generates the interactive HTML report) and `heatmap` (generates static PNG/SVG heatmaps). Validates inputs and delegates to the modules below. |
+| [`generate_report.py`](generate_report.py) | **Report builder.** Reads `snr_data.csv` and `floorplan.json`, finds the best beam pair, and produces a fully self-contained `.html` report with the interactive floor plan, SNR heatmap, beam visualisation, and specular ray tracing — all embedded in one file that runs entirely in the browser. |
+| [`plot_heatmap.py`](plot_heatmap.py) | **Static heatmap plotter.** Generates four publication-quality plots: raw Rx power heatmap, SNR heatmap, incident-angle power heatmap, and incident-angle SNR heatmap. Saves as PNG and SVG at 500 dpi. Also contains `LiveHeatmapPlotter` for real-time sweep monitoring. |
+| [`floorplan.html`](floorplan.html) | **Visual floor plan editor.** A standalone browser tool for drawing room layouts. Place TX/RX antennas, draw walls, drop shapes, then export a `floorplan.json` that the report generator uses to overlay beam paths on your actual room geometry. |
+| [`floorplan.json`](floorplan.json) | **Default floor plan.** Pre-configured for the NH Building 2nd-floor lab. Contains TX/RX pixel coordinates, boresight angles, and all wall segments. Replace or edit this for a different room. |
+| [`example_experiment/`](example_experiment/) | **Example dataset.** Contains a real `snr_data.csv` from a 63×63 beam sweep, the generated `example_experiment.html` interactive report, and a heatmap PNG. Open the HTML file in a browser to see the tool output without running anything. |
+| [`requirements.txt`](requirements.txt) | Python dependencies: `numpy`, `pandas`, `matplotlib`, `seaborn`. Install with `pip install -r requirements.txt`. |
+| [`CREDITS`](CREDITS) | Full attribution — concept, development, and AI assistance. |
+| [`LICENSE`](LICENSE) | MIT License. |
+
+---
+
 ## Requirements
 
 - Python 3.9 or newer
