@@ -89,7 +89,48 @@
 <div class="wrap">
   <div class="panel">
     <h1>Floorplan Editor</h1>
-    <div class="hint">Draw walls manually or place shapes. Save as JSON for the ray tracer.</div>
+    <!--
+      HOW TO CREATE A FLOORPLAN JSON
+      ================================
+      This editor saves a JSON file consumed by raytrace.py.
+
+      QUICK START:
+        1. Draw mode  → click start point, click end point to place walls
+        2. Shapes     → pick a shape, set parameters, click canvas to drop
+        3. Edit mode  → drag wall endpoints or bodies to reposition
+        4. Delete mode→ click any wall/shape to remove it
+        5. Set TX/RX positions and boresight angles in the panels below
+        6. Click "Save JSON" → save the file next to your experiment folders
+        7. Run: python raytrace.py report my_experiment/ --floorplan my_room.json
+
+      COORDINATE SYSTEM:
+        • Scale  : 2 pixels = 1 inch
+        • Origin : top-left corner of your room bounding box (you decide where)
+        • X axis : increases rightward  (+X = East)
+        • Y axis : increases downward   (+Y = South)
+        • Boresight angles: 0° = East, 90° = South, 180° = West, 270° = North
+
+      OUTPUT JSON FORMAT:
+        {
+          "tx":    { "x": <px>, "y": <px>, "boresight_deg": <deg> },
+          "rx":    { "x": <px>, "y": <px>, "boresight_deg": <deg> },
+          "walls": [
+            { "ax": <px>, "ay": <px>, "bx": <px>, "by": <px>, "_label": "..." },
+            ...
+          ]
+        }
+        Each wall is a line segment from point A to point B.
+        Shapes are automatically decomposed into their edge segments on export.
+        Fields prefixed with "_" are comments — ignored by the ray tracer.
+
+      TIPS:
+        • Use the Grid setting (25 or 50 px) to align walls precisely
+        • The scale badge (top-right of canvas) shows the current grid size
+        • Hover over any wall to see its coordinates, length, and angle
+        • Use "Wall (Cartesian)" or "Wall (Polar)" in the panel to add walls
+          by typing exact coordinates instead of clicking
+    -->
+    <div class="hint">Draw walls · place shapes · set TX/RX · Save JSON for the ray tracer.</div>
 
     <!-- Mode -->
     <div class="control-group">

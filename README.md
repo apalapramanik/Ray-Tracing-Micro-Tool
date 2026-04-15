@@ -131,12 +131,86 @@ A complete sweep contains **3,969 rows** (one per TX/RX beam pair combination).
 
 ## Floor Plan Setup
 
-The floor plan defines TX/RX antenna positions, boresight directions, and wall geometry.
+The floor plan is a JSON file that tells the tool:
+- Where the TX and RX antennas are (pixel coordinates)
+- Which direction each antenna faces (boresight angle)
+- Where the walls are (as line segments)
 
-1. Open `floorplan.html` in your browser — it is a fully visual drag-and-drop editor
-2. Place TX and RX markers, draw walls
-3. Click **Export** to save a `.json` file
-4. Pass it to the tool with `--floorplan your_floorplan.json`
+### Step 1 — Open the visual editor
+
+Open `floorplan.html` directly in any browser (no server needed):
+```
+double-click floorplan.html   # macOS / Windows
+```
+
+### Step 2 — Draw your room
+
+| Action | How |
+|--------|-----|
+| Draw a wall | Click **Draw** mode → click start point → click end point |
+| Place a shape | Click a shape button (Square, Rect, etc.) → click canvas to drop |
+| Edit a wall | Click **Edit** mode → drag endpoints or body |
+| Delete a wall | Click **Delete** mode → click any wall |
+| Undo last action | Click **Undo** |
+
+### Step 3 — Place TX and RX
+
+In the left panel, find the **TX Position** and **RX Position** sections.  
+Enter the X/Y pixel coordinates and boresight angle for each antenna.
+
+**Coordinate system:**
+- Origin is wherever you define it (convention: top-left corner of the room)
+- Scale: **2 pixels = 1 inch**
+- X increases rightward (+X = East)
+- Y increases downward (+Y = South)
+- Boresight angle: `0°` = facing right/East, `90°` = facing down/South, `270°` = facing up/North
+
+### Step 4 — Export
+
+Click **Save JSON** in the left panel. Save the file anywhere alongside your experiment folders.
+
+### Step 5 — Use it
+
+```bash
+python raytrace.py report my_experiment/ --floorplan my_room.json
+```
+
+---
+
+### JSON file format (manual editing)
+
+You can also create or edit the JSON file by hand. The format is:
+
+```json
+{
+  "tx": {
+    "x": 354,
+    "y": 351,
+    "boresight_deg": 270,
+    "_label": "optional description"
+  },
+  "rx": {
+    "x": 482,
+    "y": 351,
+    "boresight_deg": 270,
+    "_label": "optional description"
+  },
+  "walls": [
+    { "ax": 200, "ay": 200, "bx": 844, "by": 200, "_label": "Top wall" },
+    { "ax": 200, "ay": 200, "bx": 200, "by": 520, "_label": "Left wall" }
+  ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `tx.x`, `tx.y` | TX antenna position in pixels (2 px = 1 inch) |
+| `tx.boresight_deg` | Direction TX faces: 0=East, 90=South, 180=West, 270=North |
+| `rx.x`, `rx.y` | RX antenna position in pixels |
+| `rx.boresight_deg` | Direction RX faces |
+| `walls[].ax/ay` | Wall start point (pixels) |
+| `walls[].bx/by` | Wall end point (pixels) |
+| `_label` | Optional human-readable description, ignored by the tool |
 
 The included `nh_2ndfloor_floorplan.json` is pre-configured for the NH Building 2nd-floor lab.  
 **Create a new floor plan before running experiments in a different space.**
