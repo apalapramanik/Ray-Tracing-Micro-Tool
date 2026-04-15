@@ -1,0 +1,26 @@
+Ray Tracing Micro Tool
+======================
+
+© 2025 Apala Pramanik. All rights reserved.
+
+----------------------------------------------------------------
+
+CONCEPT & RESEARCH DIRECTION
+  Dr. Mehmet C. Vuran
+  Professor, University of Nebraska–Lincoln
+  Initiator of the mmWave beam-sweep analysis research this tool
+  is built upon.
+
+DEVELOPMENT & IMPLEMENTATION
+  Apala Pramanik
+  University of Nebraska–Lincoln
+  Design, implementation, and maintenance of the tool.
+
+AI ASSISTANCE
+  Claude by Anthropic (claude.ai)
+  Used to assist in development and implementation.
+
+----------------------------------------------------------------
+
+This tool is released under the MIT License.
+See LICENSE for full terms.

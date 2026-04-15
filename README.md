@@ -176,4 +176,8 @@ This project is licensed under the [MIT License](LICENSE).
 
 This tool was conceived and initiated by **Dr. Mehmet C. Vuran** (University of Nebraska–Lincoln) as part of ongoing mmWave propagation research.
 
-Development and implementation were carried out with assistance from **[Claude](https://claude.ai)** by Anthropic.
+Development and implementation by **Apala Pramanik**, with assistance from **[Claude](https://claude.ai)** by Anthropic.
+
+---
+
+<sub>© 2025 Apala Pramanik · Concept by Dr. Mehmet C. Vuran (University of Nebraska–Lincoln) · Built with Claude by Anthropic · All rights reserved.</sub>
