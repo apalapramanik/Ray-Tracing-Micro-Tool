@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "_scale": "2px per inch, origin offset (200,200). Room: 322\" wide, 260\" tall. Top hallway 75\", right hallway 96\".",
+  "_coord_note": "All x/y in JSON pixel space (2px per inch). Origin (200,200) = room top-left corner of outer bounding box. boresight_deg: 0=right/east, 90=down/south, 180=left/west, 270=up/north.",
+  "tx": { "x": 354, "y": 351, "boresight_deg": 270, "_label": "Transmitter — 32\" right of door, 0.5\" into room, facing hallway" },
+  "rx": { "x": 482, "y": 351, "boresight_deg": 270, "_label": "Receiver — 64\" right of TX, 0.5\" into room, facing hallway" },
+  "walls": [
+
+    {"ax": 200, "ay": 200, "bx": 844, "by": 200, "_label": "Top outer wall (322\")"},
+    {"ax": 200, "ay": 200, "bx": 200, "by": 350, "_label": "Left outer wall – hallway height (75\")"},
+    {"ax": 844, "ay": 200, "bx": 844, "by": 720, "_label": "Right outer wall (260\")"},
+    {"ax": 652, "ay": 720, "bx": 844, "by": 720, "_label": "Bottom of right hallway (96\")"},
+
+    {"ax": 652, "ay": 350, "bx": 652, "by": 720, "_label": "Inner right vertical wall – room/hallway divider (185\")"},
+
+    {"ax": 200, "ay": 350, "bx": 214, "by": 350, "_label": "Left wall stub (7\")"},
+    {"ax": 214, "ay": 350, "bx": 290, "by": 350, "_label": "Wooden door (38\")"},
+    {"ax": 290, "ay": 350, "bx": 652, "by": 350, "_label": "Inner horizontal wall after door (181\")"},
+
+    {"ax": 595, "ay": 350, "bx": 652, "by": 350, "_label": "Gray wall column – top (28.5\", inside room)"},
+    {"ax": 652, "ay": 350, "bx": 652, "by": 407, "_label": "Gray wall column – right (28.5\", flush with inner right wall)"},
+    {"ax": 652, "ay": 407, "bx": 595, "by": 407, "_label": "Gray wall column – bottom (28.5\")"},
+    {"ax": 595, "ay": 407, "bx": 595, "by": 350, "_label": "Gray wall column – left (28.5\")"},
+
+    {"ax": 604, "ay": 407, "bx": 652, "by": 407, "_label": "Metal drawer – top (48px)"},
+    {"ax": 652, "ay": 407, "bx": 652, "by": 455, "_label": "Metal drawer – right (24\", flush with inner right wall)"},
+    {"ax": 652, "ay": 455, "bx": 604, "by": 455, "_label": "Metal drawer – bottom (48px)"},
+    {"ax": 604, "ay": 455, "bx": 604, "by": 407, "_label": "Metal drawer – left (24\")"}
+
+  ]
+}

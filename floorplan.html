@@ -1,0 +1,1090 @@
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Floorplan Editor</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121a24; --text:#e7eef7; --muted:#9fb0c3; --line:#2a3a4e; --accent:#3a8fd4; }
+  body { margin:0; font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { display:flex; gap:10px; padding:10px; height:100vh; box-sizing:border-box; }
+  .panel {
+    width:310px; min-width:290px; background:var(--panel);
+    border:1px solid #1b2a3b; border-radius:8px; padding:10px; box-sizing:border-box;
+    display:flex; flex-direction:column; gap:6px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3); overflow-y:auto; max-height:100vh;
+  }
+  .panel h1 {
+    font-size:15px; margin:0 0 2px; font-weight:600;
+    background:linear-gradient(135deg,#8fd4ff 0%,#5a9fd4 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; letter-spacing:-0.3px;
+  }
+  .hint { font-size:10px; color:var(--muted); line-height:1.3; margin-bottom:3px; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .control-group {
+    background:rgba(10,15,21,0.5); border-radius:6px; padding:7px;
+    border:1px solid rgba(42,61,82,0.6); transition:all 0.2s;
+  }
+  .control-group:hover { background:rgba(10,15,21,0.65); border-color:rgba(74,125,168,0.4); }
+  .control-group-title {
+    font-size:10px; color:#8fb4d4; text-transform:uppercase;
+    letter-spacing:0.5px; margin-bottom:5px; font-weight:600; display:flex; align-items:center;
+  }
+  .control-group-title::before { content:'▸'; margin-right:4px; color:#4a7da8; font-size:8px; }
+  .compact-row {
+    display:grid; grid-template-columns:52px 1fr 38px 1fr; gap:4px;
+    align-items:center; margin-bottom:3px;
+  }
+  .compact-row.three { grid-template-columns:52px 1fr 52px 1fr; }
+  .compact-row:last-child { margin-bottom:0; }
+  label { font-size:10px; color:#b5c7d9; font-weight:500; letter-spacing:0.1px; white-space:nowrap; }
+  input[type="number"] {
+    width:100%; padding:3px 5px; border-radius:3px; border:1px solid #2a3d52;
+    background:#0d1419; color:var(--text); font-size:11px; transition:border-color 0.2s;
+  }
+  input[type="number"]:focus { outline:none; border-color:#4a7da8; }
+  select, button {
+    padding:5px 8px; border-radius:4px; border:1px solid #2a3d52;
+    background:#0d1419; color:var(--text); cursor:pointer; font-size:11px;
+    transition:all 0.2s; font-weight:500;
+  }
+  button:hover { border-color:#4a7da8; background:#0f1820; }
+  button:active { transform:translateY(1px); }
+  .btn-grid  { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+  .btn-grid-2{ display:grid; grid-template-columns:repeat(2,1fr); gap:4px; }
+  /* Shape type buttons */
+  .shape-btns { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:6px; }
+  .shape-btn { padding:6px 4px; font-size:10px; text-align:center; }
+  .shape-btn.active { border-color:#3a8fd4; background:#0f1c2d; color:#8fd4ff; }
+  .stat {
+    font-family:ui-monospace,monospace; font-size:9.5px; color:#c5d9eb;
+    background:#0a0f15; padding:5px 7px; border-radius:4px; border:1px solid #1a2835; line-height:1.4;
+  }
+  .canvasWrap { flex:1; background:#06090d; border:1px solid #142233; border-radius:10px; position:relative; overflow:hidden; }
+  canvas { width:100%; height:100%; display:block; }
+  .scale-badge {
+    position:absolute; right:10px; top:10px; background:rgba(18,26,36,0.92);
+    border:1px solid #2a3d52; border-radius:8px; padding:10px 14px; font-size:11.5px; color:#b5c7d9;
+    backdrop-filter:blur(8px); font-family:ui-monospace,monospace; line-height:1.6;
+  }
+  .scale-badge .title { color:#d5e5f5; font-weight:600; margin-bottom:5px; font-size:12px; }
+  .scale-badge .value { color:#8fd4ff; font-weight:500; }
+  .cursor-coords {
+    position:absolute; background:rgba(18,26,36,0.95); border:1px solid #3a5878;
+    border-radius:8px; padding:6px 10px; font-size:11px; color:#8fd4ff;
+    font-family:ui-monospace,monospace; pointer-events:none; opacity:0;
+    transition:opacity 0.15s; z-index:1000; white-space:nowrap;
+  }
+  .cursor-coords.visible { opacity:1; }
+  .badge {
+    position:absolute; left:10px; top:10px; background:rgba(18,26,36,0.92);
+    border:1px solid #2a3d52; border-radius:8px; padding:8px 10px; font-size:10.5px; color:#b5c7d9;
+    backdrop-filter:blur(8px);
+  }
+  .badge strong { color:#d5e5f5; font-size:11px; }
+  .param-section { display:none; }
+  .param-section.visible { display:block; }
+  .section-divider { height:1px; background:linear-gradient(90deg,transparent,#2a3d52 20%,#2a3d52 80%,transparent); margin:5px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>Floorplan Editor</h1>
+    <div class="hint">Draw walls manually or place shapes. Save as JSON for the ray tracer.</div>
+
+    <!-- Mode -->
+    <div class="control-group">
+      <div class="control-group-title">Mode</div>
+      <div class="btn-grid">
+        <button id="modeDrawWall">▬ Draw</button>
+        <button id="modeEditWall">✎ Edit</button>
+        <button id="modeDeleteWall">⊗ Delete</button>
+        <button id="modeUndo">↶ Undo</button>
+        <button id="modeClear">⟲ Clear</button>
+      </div>
+    </div>
+
+    <!-- Selected Wall Properties (shown only in edit mode when a plain wall is selected) -->
+    <div class="control-group" id="wallPropsPanel" style="display:none;border-color:rgba(58,143,212,0.5);">
+      <div class="control-group-title" style="color:#8fd4ff;">Selected Wall</div>
+      <div class="compact-row">
+        <label>Start X</label><input id="wp-ax" type="number" step="1">
+        <label>Y</label><input id="wp-ay" type="number" step="1">
+      </div>
+      <div class="compact-row">
+        <label>End X</label><input id="wp-bx" type="number" step="1">
+        <label>Y</label><input id="wp-by" type="number" step="1">
+      </div>
+      <div class="compact-row">
+        <label>Length</label><input id="wp-length" type="number" step="1" title="Keeps Start fixed, moves End">
+        <label>Angle°</label><input id="wp-angle" type="number" step="1" title="Rotates around Start">
+      </div>
+      <div class="btn-grid-2" style="margin-top:4px;">
+        <button id="wp-rot90">↻ +90°</button>
+        <button id="wp-rot-90">↺ −90°</button>
+      </div>
+      <div class="section-divider" style="margin:5px 0;"></div>
+      <div class="hint">Extend/retract from each end (±px):</div>
+      <div class="compact-row" style="margin-top:3px;">
+        <label>From Start</label><input id="wp-extA" type="number" step="5" value="0" title="Moves Start, keeps End fixed">
+        <label>From End</label><input id="wp-extB" type="number" step="5" value="0" title="Moves End, keeps Start fixed">
+      </div>
+      <div class="row" style="margin-top:4px;">
+        <button id="wp-applyExt" style="flex:1;">Apply Extension</button>
+        <button id="wp-deselect" style="color:#ff8080;border-color:#5a2a2a;" title="Deselect">✕</button>
+      </div>
+    </div>
+
+    <!-- Shapes -->
+    <div class="control-group">
+      <div class="control-group-title">Shapes · Click canvas to place</div>
+      <div class="shape-btns">
+        <button class="shape-btn" data-shape="square">⬛ Square</button>
+        <button class="shape-btn" data-shape="rectangle">▬ Rect</button>
+        <button class="shape-btn" data-shape="triangle">▲ Triangle</button>
+        <button class="shape-btn" data-shape="circle">⬤ Circle</button>
+        <button class="shape-btn" data-shape="lshape">⌐ L-Shape</button>
+        <button class="shape-btn" data-shape="polygon">⬡ Polygon</button>
+      </div>
+
+      <!-- Square -->
+      <div class="param-section visible" id="params-square">
+        <div class="compact-row">
+          <label>Side</label><input id="sq-side" type="number" value="150" min="1">
+          <label>Rot°</label><input id="sq-rot" type="number" value="0">
+        </div>
+      </div>
+      <!-- Rectangle -->
+      <div class="param-section" id="params-rectangle">
+        <div class="compact-row">
+          <label>Width</label><input id="rect-w" type="number" value="200" min="1">
+          <label>Height</label><input id="rect-h" type="number" value="120" min="1">
+        </div>
+        <div class="compact-row">
+          <label>Rot°</label><input id="rect-rot" type="number" value="0">
+        </div>
+      </div>
+      <!-- Triangle -->
+      <div class="param-section" id="params-triangle">
+        <div class="compact-row">
+          <label>Side A</label><input id="tri-a" type="number" value="150" min="1">
+          <label>Side B</label><input id="tri-b" type="number" value="120" min="1">
+        </div>
+        <div class="compact-row">
+          <label>Side C</label><input id="tri-c" type="number" value="100" min="1">
+          <label>Rot°</label><input id="tri-rot" type="number" value="0">
+        </div>
+        <div id="tri-warn" style="font-size:9px;color:#ff7070;margin-top:2px;display:none;">⚠ Invalid triangle (sides violate triangle inequality)</div>
+      </div>
+      <!-- Circle -->
+      <div class="param-section" id="params-circle">
+        <div class="compact-row">
+          <label>Radius</label><input id="circ-r" type="number" value="80" min="1">
+          <label>Sides</label><input id="circ-n" type="number" value="12" min="3" max="64">
+        </div>
+        <div class="compact-row">
+          <label>Rot°</label><input id="circ-rot" type="number" value="0">
+        </div>
+      </div>
+      <!-- L-Shape -->
+      <div class="param-section" id="params-lshape">
+        <div class="compact-row">
+          <label>OuterW</label><input id="ls-ow" type="number" value="200" min="1">
+          <label>OuterH</label><input id="ls-oh" type="number" value="200" min="1">
+        </div>
+        <div class="compact-row">
+          <label>InnerW</label><input id="ls-iw" type="number" value="100" min="1">
+          <label>InnerH</label><input id="ls-ih" type="number" value="100" min="1">
+        </div>
+        <div class="compact-row">
+          <label>Rot°</label><input id="ls-rot" type="number" value="0">
+        </div>
+      </div>
+      <!-- Polygon -->
+      <div class="param-section" id="params-polygon">
+        <div class="compact-row">
+          <label>Sides</label><input id="poly-n" type="number" value="6" min="3" max="20">
+          <label>Radius</label><input id="poly-r" type="number" value="100" min="1">
+        </div>
+        <div class="compact-row">
+          <label>Rot°</label><input id="poly-rot" type="number" value="0">
+        </div>
+        <div style="margin-top:4px;">
+          <label style="font-size:9px;color:var(--muted);">Per-vertex radii (comma-sep, overrides Radius above):</label>
+          <input id="poly-radii" type="text" placeholder="e.g. 100,60,100,60,100,60"
+            style="width:100%;padding:3px 5px;margin-top:2px;border-radius:3px;border:1px solid #2a3d52;background:#0d1419;color:var(--text);font-size:10px;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+      <div class="hint" id="shapeHint">Select a shape then click on the canvas to place it.</div>
+      <div class="row" style="margin-top:4px;">
+        <button id="placeShapeManualBtn" style="flex:1;">Place at Center X/Y ↓</button>
+      </div>
+      <div class="compact-row" style="margin-top:4px;">
+        <label>Center X</label><input id="shape-cx" type="number" value="400">
+        <label>Y</label><input id="shape-cy" type="number" value="300">
+      </div>
+    </div>
+
+    <!-- Wall (Cartesian) -->
+    <div class="control-group">
+      <div class="control-group-title">Wall (Cartesian)</div>
+      <div class="compact-row">
+        <label>Start X</label><input id="wallAx" type="number" step="1" value="100">
+        <label>Y</label><input id="wallAy" type="number" step="1" value="100">
+      </div>
+      <div class="compact-row">
+        <label>End X</label><input id="wallBx" type="number" step="1" value="300">
+        <label>Y</label><input id="wallBy" type="number" step="1" value="100">
+      </div>
+      <div class="row" style="margin-top:5px;">
+        <button id="addWallBtn" style="flex:1;">+ Add Wall</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-group-title">Wall (Polar)</div>
+      <div class="compact-row">
+        <label>Angle°</label><input id="wallAngle" type="number" step="1" value="0">
+        <label>Length</label><input id="wallLength" type="number" step="1" value="200">
+      </div>
+      <div class="row" style="margin-top:5px;">
+        <button id="addWallPolarBtn" style="flex:1;">+ Add Polar</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="control-group">
+      <div class="control-group-title">Settings</div>
+      <div class="row">
+        <label style="flex:0 0 35px;">Grid</label>
+        <select id="grid" style="flex:1;">
+          <option value="0">Off</option>
+          <option value="25" selected="">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- File -->
+    <div class="control-group">
+      <div class="control-group-title">File</div>
+      <div class="btn-grid-2">
+        <button id="saveJsonBtn">💾 Save JSON</button>
+        <button id="loadJsonBtn">📂 Load JSON</button>
+      </div>
+      <input id="loadJsonInput" type="file" accept=".json" style="display:none;">
+    </div>
+
+    <div class="stat" id="stats">Walls: 0</div>
+  </div>
+
+  <div class="canvasWrap">
+    <div class="badge" id="modeBadge"><strong>Floorplan Editor</strong><br><span id="modeLabel">Draw Wall mode</span></div>
+    <div class="scale-badge" id="scaleBadge">
+      <div class="title">Scale</div>
+      <div>Grid: <span class="value" id="gridScale">25 px</span></div>
+    </div>
+    <div class="cursor-coords" id="cursorCoords"></div>
+    <canvas id="c"></canvas>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const gridSel     = document.getElementById('grid');
+  const statsEl     = document.getElementById('stats');
+  const gridScaleEl = document.getElementById('gridScale');
+  const cursorCoords= document.getElementById('cursorCoords');
+  const modeLabel   = document.getElementById('modeLabel');
+  const shapeHint   = document.getElementById('shapeHint');
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let walls = [];
+  let mode  = 'drawWall';       // 'drawWall' | 'editWall' | 'deleteWall' | 'placeShape'
+  let wallDraft = null;
+  let drag  = null;
+  let activeShape = null;       // 'square' | 'rectangle' | 'triangle' | 'circle' | 'lshape' | 'polygon'
+  let mousePos = { x: 0, y: 0 };
+  let hoveredWallIndex = null;
+  let shapeCounter = 0;
+  let selectedWallIndex = null;
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const rad = d => d * Math.PI / 180;
+  const deg = r => r * 180 / Math.PI;
+  const norm360 = d => ((d % 360) + 360) % 360;
+  const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
+  const v = id => parseFloat(document.getElementById(id).value) || 0;
+
+  // ── Canvas sizing ────────────────────────────────────────────────────────
+  let W, H;
+  function resize() {
+    const DPR = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width  = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  function canvasToLocal(ev) {
+    const r = canvas.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  }
+
+  // ── Shape generation ─────────────────────────────────────────────────────
+  function getShapeParams(type) {
+    if (type === 'square')    return { side: v('sq-side'), rot: v('sq-rot') };
+    if (type === 'rectangle') return { width: v('rect-w'), height: v('rect-h'), rot: v('rect-rot') };
+    if (type === 'triangle')  return { a: v('tri-a'), b: v('tri-b'), c: v('tri-c'), rot: v('tri-rot') };
+    if (type === 'circle')    return { radius: v('circ-r'), segments: Math.max(3,Math.round(v('circ-n'))), rot: v('circ-rot') };
+    if (type === 'lshape')    return { ow: v('ls-ow'), oh: v('ls-oh'), iw: v('ls-iw'), ih: v('ls-ih'), rot: v('ls-rot') };
+    if (type === 'polygon') {
+      const radiiStr = document.getElementById('poly-radii').value.trim();
+      const customRadii = radiiStr ? radiiStr.split(',').map(s=>parseFloat(s.trim())).filter(n=>n>0) : null;
+      return { n: Math.max(3,Math.round(v('poly-n'))), radius: v('poly-r'), rot: v('poly-rot'), customRadii };
+    }
+    return {};
+  }
+
+  // Returns array of {ax,ay,bx,by, + shape metadata} segments centred at (cx,cy)
+  function generateSegs(type, cx, cy) {
+    const segs = [];
+
+    // rotate a point around (cx,cy) by `rotDeg`
+    function rot(x, y, rotDeg) {
+      const r = rad(rotDeg);
+      const rx = x * Math.cos(r) - y * Math.sin(r);
+      const ry = x * Math.sin(r) + y * Math.cos(r);
+      return { x: cx + rx, y: cy + ry };
+    }
+
+    function polygon(pts) {
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i+1) % pts.length];
+        segs.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+      }
+    }
+
+    if (type === 'square') {
+      const s = v('sq-side') / 2, r = v('sq-rot');
+      polygon([ rot(-s,-s,r), rot(s,-s,r), rot(s,s,r), rot(-s,s,r) ]);
+
+    } else if (type === 'rectangle') {
+      const w = v('rect-w')/2, h = v('rect-h')/2, r = v('rect-rot');
+      polygon([ rot(-w,-h,r), rot(w,-h,r), rot(w,h,r), rot(-w,h,r) ]);
+
+    } else if (type === 'triangle') {
+      // Scalene triangle from 3 side lengths using law of cosines
+      const sA = v('tri-a'), sB = v('tri-b'), sC = v('tri-c'), r = v('tri-rot');
+      const warn = document.getElementById('tri-warn');
+      const valid = sA > 0 && sB > 0 && sC > 0 && sA+sB>sC && sA+sC>sB && sB+sC>sA;
+      warn.style.display = valid ? 'none' : 'block';
+      if (valid) {
+        // Place P1 at (-sA/2,0), P2 at (sA/2,0), find P3 using angle at P1
+        // cos(angle@P1) = (sA² + sB² - sC²) / (2·sA·sB)
+        const cosP1 = (sA*sA + sB*sB - sC*sC) / (2*sA*sB);
+        const angP1 = Math.acos(Math.max(-1, Math.min(1, cosP1)));
+        const P1x = -sA/2, P2x = sA/2;
+        const P3x = P1x + sB * Math.cos(angP1);
+        const P3y = sB * Math.sin(angP1);   // positive y = upward in math coords
+        // Shift so centroid is at origin
+        const gx = (P1x + P2x + P3x) / 3, gy = (0 + 0 + P3y) / 3;
+        polygon([
+          rot(P1x - gx, -(0   - gy), r),
+          rot(P2x - gx, -(0   - gy), r),
+          rot(P3x - gx, -(P3y - gy), r),
+        ]);
+      }
+
+    } else if (type === 'circle') {
+      const R = v('circ-r'), N = Math.max(3, Math.round(v('circ-n'))), r = v('circ-rot');
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * 360;
+        pts.push(rot(R * Math.cos(rad(a)), R * Math.sin(rad(a)), r));
+      }
+      polygon(pts);
+
+    } else if (type === 'lshape') {
+      // L-shape: outer rectangle with top-right corner cut out
+      const ow = v('ls-ow'), oh = v('ls-oh');
+      const iw = Math.min(v('ls-iw'), ow - 1), ih = Math.min(v('ls-ih'), oh - 1);
+      const r = v('ls-rot');
+      // 6 vertices (top-left going clockwise, notch at top-right)
+      polygon([
+        rot(-ow/2, -oh/2, r),  // top-left
+        rot(ow/2 - iw, -oh/2, r),  // notch top-left
+        rot(ow/2 - iw, -oh/2 + ih, r),  // notch inner corner
+        rot(ow/2, -oh/2 + ih, r),  // notch top-right
+        rot(ow/2, oh/2, r),    // bottom-right
+        rot(-ow/2, oh/2, r),   // bottom-left
+      ]);
+
+    } else if (type === 'polygon') {
+      const N = Math.max(3, Math.round(v('poly-n'))), r = v('poly-rot');
+      const radiiStr = document.getElementById('poly-radii').value.trim();
+      let radii;
+      if (radiiStr) {
+        radii = radiiStr.split(',').map(s => parseFloat(s.trim())).filter(n => n > 0);
+        while (radii.length < N) radii.push(radii[radii.length - 1] || v('poly-r'));
+        radii = radii.slice(0, N);
+      } else {
+        const R = v('poly-r');
+        radii = Array.from({length: N}, () => R);
+      }
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * 360;
+        pts.push(rot(radii[i] * Math.cos(rad(a)), radii[i] * Math.sin(rad(a)), r));
+      }
+      polygon(pts);
+    }
+
+    // Attach shape metadata to every segment
+    const id = ++shapeCounter;
+    const params = getShapeParams(type);
+    return segs.map(s => ({ ...s, shapeId: id, shapeType: type, shapeCx: cx, shapeCy: cy, shapeParams: params }));
+  }
+
+  // ── Shape helpers ────────────────────────────────────────────────────────
+  function getShapeWalls(sid) { return walls.filter(w => w.shapeId === sid); }
+
+  // Max distance from stored center to any vertex (used to position scale handle)
+  function shapeMaxRadius(sid, cx, cy) {
+    let r = 0;
+    for (const w of getShapeWalls(sid)) {
+      r = Math.max(r, Math.hypot(w.ax-cx, w.ay-cy), Math.hypot(w.bx-cx, w.by-cy));
+    }
+    return r || 30;
+  }
+
+  // ── Wall properties panel ────────────────────────────────────────────────
+  const wallPropsPanel = document.getElementById('wallPropsPanel');
+  const wpAx = document.getElementById('wp-ax'), wpAy = document.getElementById('wp-ay');
+  const wpBx = document.getElementById('wp-bx'), wpBy = document.getElementById('wp-by');
+  const wpLength = document.getElementById('wp-length'), wpAngle = document.getElementById('wp-angle');
+
+  function selectWall(idx) {
+    selectedWallIndex = idx;
+    if (idx === null || walls[idx]?.shapeId) { wallPropsPanel.style.display = 'none'; return; }
+    wallPropsPanel.style.display = 'block';
+    syncWallProps();
+  }
+
+  function syncWallProps() {
+    if (selectedWallIndex === null) return;
+    const w = walls[selectedWallIndex]; if (!w) return;
+    wpAx.value = w.ax.toFixed(1); wpAy.value = w.ay.toFixed(1);
+    wpBx.value = w.bx.toFixed(1); wpBy.value = w.by.toFixed(1);
+    const len = Math.hypot(w.bx-w.ax, w.by-w.ay);
+    const ang = norm360(deg(Math.atan2(w.by-w.ay, w.bx-w.ax)));
+    wpLength.value = len.toFixed(1);
+    wpAngle.value  = ang.toFixed(1);
+    document.getElementById('wp-extA').value = 0;
+    document.getElementById('wp-extB').value = 0;
+  }
+
+  function rotateWallAroundMidpoint(idx, angleDeg) {
+    const w = walls[idx]; if (!w) return;
+    const mx = (w.ax+w.bx)/2, my = (w.ay+w.by)/2;
+    const cos = Math.cos(rad(angleDeg)), sin = Math.sin(rad(angleDeg));
+    function rotPt(x,y) { const dx=x-mx,dy=y-my; return {x:mx+dx*cos-dy*sin,y:my+dx*sin+dy*cos}; }
+    const na=rotPt(w.ax,w.ay), nb=rotPt(w.bx,w.by);
+    w.ax=na.x; w.ay=na.y; w.bx=nb.x; w.by=nb.y;
+  }
+
+  // ── Hit testing ──────────────────────────────────────────────────────────
+  function hitCircle(px,py,cx,cy,r) { return (px-cx)**2+(py-cy)**2<=r*r; }
+
+  function hitTestWallEndpoint(mx,my,i,ep) {
+    const w=walls[i]; if(!w) return false;
+    return hitCircle(mx,my, ep==='a'?w.ax:w.bx, ep==='a'?w.ay:w.by, 10);
+  }
+  function hitTestWallBody(mx,my,i) {
+    const w=walls[i]; if(!w) return false;
+    const dx=w.bx-w.ax, dy=w.by-w.ay, lsq=dx*dx+dy*dy;
+    if(lsq===0) return hitCircle(mx,my,w.ax,w.ay,10);
+    const t=clamp(((mx-w.ax)*dx+(my-w.ay)*dy)/lsq,0,1);
+    return hitCircle(mx,my,w.ax+t*dx,w.ay+t*dy,8);
+  }
+  function findWallAtPoint(mx,my) {
+    for(let i=0;i<walls.length;i++){
+      if(hitTestWallEndpoint(mx,my,i,'a')) return{wallIndex:i,type:'endpoint',endpoint:'a'};
+      if(hitTestWallEndpoint(mx,my,i,'b')) return{wallIndex:i,type:'endpoint',endpoint:'b'};
+    }
+    for(let i=0;i<walls.length;i++){
+      if(hitTestWallBody(mx,my,i)) return{wallIndex:i,type:'body'};
+    }
+    return null;
+  }
+
+  // ── Drawing ──────────────────────────────────────────────────────────────
+  function drawGrid(step) {
+    if(!step) return;
+    ctx.save();
+    ctx.strokeStyle='rgba(70,100,130,0.18)'; ctx.lineWidth=1;
+    for(let x=0;x<=W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<=H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.restore();
+  }
+
+  function drawCoordinateSystem() {
+    const ox=40,oy=H-40,al=60;
+    ctx.save();
+    ctx.strokeStyle='rgba(255,100,100,0.95)';ctx.lineWidth=2.5;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox+al,oy);ctx.stroke();
+    ctx.fillStyle='rgba(255,100,100,0.95)';ctx.font='bold 11px ui-monospace,monospace';
+    ctx.fillText('+X',ox+al+4,oy+4);
+    ctx.strokeStyle='rgba(100,255,100,0.95)';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox,oy-al);ctx.stroke();
+    ctx.fillStyle='rgba(100,255,100,0.95)';ctx.fillText('+Y',ox-22,oy-al);
+    ctx.restore();
+  }
+
+  function drawWall(seg, alpha=1.0, showMeasurements=false, showEndpoints=false) {
+    ctx.save();
+    ctx.globalAlpha=alpha; ctx.strokeStyle='rgba(220,230,245,0.6)';
+    ctx.lineWidth=12; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(seg.ax,seg.ay); ctx.lineTo(seg.bx,seg.by); ctx.stroke();
+
+    if(showEndpoints){
+      ctx.fillStyle='rgba(143,212,255,0.7)'; ctx.strokeStyle='rgba(180,220,255,0.9)'; ctx.lineWidth=2;
+      for(const[px,py] of[[seg.ax,seg.ay],[seg.bx,seg.by]]){
+        ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fill();ctx.stroke();
+      }
+    }
+    if(showMeasurements){
+      const dx=seg.bx-seg.ax,dy=seg.by-seg.ay;
+      const len=Math.hypot(dx,dy),ang=norm360(deg(Math.atan2(dy,dx)));
+      const mx=(seg.ax+seg.bx)/2,my=(seg.ay+seg.by)/2;
+      ctx.fillStyle='rgba(18,26,36,0.90)';ctx.fillRect(mx-65,my-35,130,50);
+      ctx.strokeStyle='rgba(143,212,255,0.6)';ctx.lineWidth=1;ctx.strokeRect(mx-65,my-35,130,50);
+      ctx.font='11px ui-monospace,monospace';ctx.fillStyle='rgba(143,212,255,1)';ctx.textAlign='center';
+      ctx.fillText(`Length: ${len.toFixed(1)} px`,mx,my-15);
+      ctx.fillText(`Angle: ${ang.toFixed(1)}°`,mx,my);
+      ctx.fillStyle='rgba(159,176,195,0.9)';ctx.font='10px ui-monospace,monospace';
+      ctx.fillText(`(${seg.ax.toFixed(0)},${seg.ay.toFixed(0)})→(${seg.bx.toFixed(0)},${seg.by.toFixed(0)})`,mx,my+15);
+    }
+    ctx.restore();
+  }
+
+  function drawShapePreview(cx, cy) {
+    if (!activeShape) return;
+    const segs = generateSegs(activeShape, cx, cy);
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#3a8fd4';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([6, 4]);
+    for (const s of segs) {
+      ctx.beginPath(); ctx.moveTo(s.ax, s.ay); ctx.lineTo(s.bx, s.by); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // centre dot
+    ctx.fillStyle = 'rgba(58,143,212,0.8)';
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRoundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+    ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+    ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+    ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r);
+    ctx.closePath();
+  }
+
+  function drawWallTooltip(seg, mx, my) {
+    const lines = [];
+    const p = seg.shapeParams || {};
+
+    if (seg.shapeType === 'circle') {
+      lines.push(['⬤ Circle', '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`Radius: ${p.radius} px  ·  ${p.segments} sides`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else if (seg.shapeType === 'square') {
+      lines.push(['⬛ Square', '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`Side: ${p.side} px`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else if (seg.shapeType === 'rectangle') {
+      lines.push(['▬ Rectangle', '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`Width: ${p.width} px  ·  Height: ${p.height} px`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else if (seg.shapeType === 'triangle') {
+      lines.push(['▲ Triangle', '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`A: ${p.a} px  ·  B: ${p.b} px  ·  C: ${p.c} px`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else if (seg.shapeType === 'lshape') {
+      lines.push(['⌐ L-Shape', '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`Outer: ${p.ow}×${p.oh} px`, '#c5d9eb']);
+      lines.push([`Inner cut: ${p.iw}×${p.ih} px`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else if (seg.shapeType === 'polygon') {
+      lines.push([`⬡ Polygon (${p.n} sides)`, '#8fd4ff']);
+      lines.push([`Center: (${seg.shapeCx.toFixed(1)}, ${seg.shapeCy.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`Radius: ${p.radius} px`, '#c5d9eb']);
+      if (p.rot) lines.push([`Rotation: ${p.rot}°`, '#9fb0c3']);
+    } else {
+      // Plain wall segment
+      lines.push(['▬ Wall', '#8fd4ff']);
+      lines.push([`A: (${seg.ax.toFixed(1)}, ${seg.ay.toFixed(1)})`, '#c5d9eb']);
+      lines.push([`B: (${seg.bx.toFixed(1)}, ${seg.by.toFixed(1)})`, '#c5d9eb']);
+      const len = Math.hypot(seg.bx-seg.ax, seg.by-seg.ay);
+      const ang = norm360(deg(Math.atan2(seg.by-seg.ay, seg.bx-seg.ax)));
+      lines.push([`Length: ${len.toFixed(1)} px  ·  ${ang.toFixed(1)}°`, '#9fb0c3']);
+    }
+
+    const pad = 9, lineH = 17, boxW = 220, boxH = lines.length * lineH + pad * 2;
+    let tx = mx + 16, ty = my - boxH - 12;
+    if (tx + boxW > W - 5) tx = mx - boxW - 16;
+    if (ty < 5) ty = my + 16;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(12,18,28,0.97)';
+    drawRoundRect(tx, ty, boxW, boxH, 7);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(58,143,212,0.65)';
+    ctx.lineWidth = 1;
+    drawRoundRect(tx, ty, boxW, boxH, 7);
+    ctx.stroke();
+
+    for (let i = 0; i < lines.length; i++) {
+      ctx.font = i === 0 ? 'bold 11px ui-monospace,monospace' : '10.5px ui-monospace,monospace';
+      ctx.fillStyle = lines[i][1];
+      ctx.textAlign = 'left';
+      ctx.fillText(lines[i][0], tx + pad, ty + pad + 12 + i * lineH);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,W,H);
+    const g=ctx.createRadialGradient(W*.5,H*.4,40,W*.5,H*.5,Math.max(W,H));
+    g.addColorStop(0,'rgba(18,26,36,0.25)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    drawGrid(parseFloat(gridSel.value)||0);
+    drawCoordinateSystem();
+
+    const showEp = (mode==='editWall'||mode==='deleteWall');
+    for(const w of walls) drawWall(w,1.0,false,showEp);
+    if(wallDraft) drawWall(wallDraft,0.55,true,false);
+
+    // Selected wall highlight (plain wall only)
+    if (selectedWallIndex !== null && walls[selectedWallIndex] && !walls[selectedWallIndex].shapeId) {
+      const sw = walls[selectedWallIndex];
+      ctx.save();
+      ctx.strokeStyle = 'rgba(58,143,212,0.9)'; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.moveTo(sw.ax,sw.ay); ctx.lineTo(sw.bx,sw.by); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Hovered shape/wall highlight
+    if (hoveredWallIndex !== null && mode !== 'placeShape') {
+      const hov = walls[hoveredWallIndex];
+      const sid = hov.shapeId;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(58,143,212,0.75)';
+      ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.globalAlpha = 0.45;
+      for (const w of walls) {
+        if (sid ? w.shapeId === sid : w === hov) {
+          ctx.beginPath(); ctx.moveTo(w.ax,w.ay); ctx.lineTo(w.bx,w.by); ctx.stroke();
+        }
+      }
+      ctx.restore();
+      drawWallTooltip(hov, mousePos.x, mousePos.y);
+    }
+
+    // Shape handles in edit mode
+    if (mode === 'editWall') {
+      const seen = new Set();
+      for (const w of walls) {
+        if (!w.shapeId || seen.has(w.shapeId)) continue;
+        seen.add(w.shapeId);
+        const cx = w.shapeCx, cy = w.shapeCy;
+        const R = shapeMaxRadius(w.shapeId, cx, cy);
+        const hx = cx + R + 14, hy = cy; // scale handle sits to the right
+
+        ctx.save();
+        // Dashed line: center → scale handle
+        ctx.strokeStyle = 'rgba(255,180,50,0.35)';
+        ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(hx, hy); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Move handle — cyan circle at shape centre
+        ctx.fillStyle = 'rgba(0,210,255,0.85)'; ctx.strokeStyle = 'rgba(0,210,255,1)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('✥', cx, cy);
+
+        // Scale handle — orange square at right edge
+        ctx.fillStyle = 'rgba(255,160,40,0.9)'; ctx.strokeStyle = 'rgba(255,160,40,1)'; ctx.lineWidth = 1.5;
+        ctx.fillRect(hx-7, hy-7, 14, 14); ctx.strokeRect(hx-7, hy-7, 14, 14);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('⤡', hx, hy);
+        ctx.restore();
+      }
+    }
+
+    // Shape preview while in placeShape mode
+    if(mode==='placeShape' && activeShape) drawShapePreview(mousePos.x, mousePos.y);
+
+    // Wall drag measurement overlay
+    if(drag && (drag.kind==='wallEndpoint'||drag.kind==='wallBody')){
+      const w=walls[drag.wallIndex]; if(w){
+        const dx=w.bx-w.ax,dy=w.by-w.ay,mx=(w.ax+w.bx)/2,my=(w.ay+w.by)/2;
+        ctx.save();
+        ctx.fillStyle='rgba(18,26,36,0.92)';ctx.fillRect(mx-70,my-30,140,45);
+        ctx.strokeStyle='rgba(143,212,255,0.8)';ctx.lineWidth=2;ctx.strokeRect(mx-70,my-30,140,45);
+        ctx.font='11px ui-monospace,monospace';ctx.fillStyle='rgba(143,212,255,1)';ctx.textAlign='center';
+        ctx.fillText(`Length: ${Math.hypot(dx,dy).toFixed(1)} px`,mx,my-8);
+        ctx.fillText(`Angle: ${norm360(deg(Math.atan2(dy,dx))).toFixed(1)}°`,mx,my+8);
+        ctx.restore();
+      }
+    }
+
+    statsEl.textContent=`Walls: ${walls.length}`;
+    const gv=parseFloat(gridSel.value)||0;
+    gridScaleEl.textContent=gv?`${gv} px`:'Off';
+  }
+
+  // ── Mouse events ─────────────────────────────────────────────────────────
+  canvas.addEventListener('mousedown', ev => {
+    const {x,y}=canvasToLocal(ev);
+
+    if(mode==='placeShape' && activeShape){
+      const segs = generateSegs(activeShape, x, y);
+      walls.push(...segs);
+      activeShape = null;
+      document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active'));
+      setMode('drawWall');
+      draw();
+      return;
+    }
+    if(mode==='deleteWall'){
+      const h=findWallAtPoint(x,y); if(h){walls.splice(h.wallIndex,1);draw();} return;
+    }
+    if(mode==='editWall'){
+      // Check shape handles first
+      const seenIds = new Set();
+      for (const w of walls) {
+        if (!w.shapeId || seenIds.has(w.shapeId)) continue;
+        seenIds.add(w.shapeId);
+        const cx = w.shapeCx, cy = w.shapeCy;
+        const R = shapeMaxRadius(w.shapeId, cx, cy);
+        const hx = cx + R + 14, hy = cy;
+
+        // Scale handle hit?
+        if (x >= hx-10 && x <= hx+10 && y >= hy-10 && y <= hy+10) {
+          const origDist = Math.hypot(hx - cx, hy - cy);
+          const sw = getShapeWalls(w.shapeId);
+          drag = {
+            kind: 'shapeScale', shapeId: w.shapeId, cx, cy,
+            origDist,
+            origWalls: sw.map(s => ({ idx: walls.indexOf(s), ax:s.ax, ay:s.ay, bx:s.bx, by:s.by }))
+          };
+          return;
+        }
+        // Move handle hit?
+        if (hitCircle(x, y, cx, cy, 12)) {
+          drag = { kind: 'shapeMove', shapeId: w.shapeId, lastX: x, lastY: y };
+          return;
+        }
+      }
+
+      // Fall through to individual wall endpoint/body editing
+      const h=findWallAtPoint(x,y);
+      if(h){
+        if(h.type==='endpoint') drag={kind:'wallEndpoint',wallIndex:h.wallIndex,endpoint:h.endpoint};
+        else{ const w=walls[h.wallIndex]; drag={kind:'wallBody',wallIndex:h.wallIndex,offsetX:x-w.ax,offsetY:y-w.ay}; }
+        // Select if it's a plain wall
+        if (!walls[h.wallIndex]?.shapeId) selectWall(h.wallIndex);
+        else selectWall(null);
+      } else {
+        selectWall(null);
+      }
+      return;
+    }
+    if(mode==='drawWall'){ wallDraft={ax:x,ay:y,bx:x,by:y}; return; }
+  });
+
+  canvas.addEventListener('mousemove', ev => {
+    const {x,y}=canvasToLocal(ev);
+    mousePos={x,y};
+
+    // Cursor tooltip
+    const r=canvas.getBoundingClientRect();
+    let tx=ev.clientX-r.left+15, ty=ev.clientY-r.top+15;
+    if(tx+130>W) tx-=145; if(ty+30>H) ty-=45;
+    cursorCoords.textContent=`x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`;
+    cursorCoords.style.left=tx+'px'; cursorCoords.style.top=ty+'px';
+
+    if(mode==='placeShape'){ draw(); return; }
+
+    // Hover detection
+    const prevHovered = hoveredWallIndex;
+    hoveredWallIndex = null;
+    if (mode !== 'deleteWall') {
+      for (let i = walls.length-1; i >= 0; i--) {
+        if (hitTestWallBody(x, y, i)) { hoveredWallIndex = i; break; }
+      }
+    }
+    if (hoveredWallIndex !== prevHovered) draw();
+
+    if(wallDraft){ wallDraft.bx=x; wallDraft.by=y; draw(); return; }
+    if(!drag) return;
+
+    if(drag.kind==='wallEndpoint'){
+      const w=walls[drag.wallIndex];
+      if(drag.endpoint==='a'){w.ax=x;w.ay=y;}else{w.bx=x;w.by=y;}
+      draw(); return;
+    }
+    if(drag.kind==='wallBody'){
+      const w=walls[drag.wallIndex];
+      const dx=w.bx-w.ax,dy=w.by-w.ay;
+      w.ax=x-drag.offsetX; w.ay=y-drag.offsetY;
+      w.bx=w.ax+dx; w.by=w.ay+dy;
+      draw(); return;
+    }
+    if(drag.kind==='shapeMove'){
+      const dx=x-drag.lastX, dy=y-drag.lastY;
+      for (const w of walls) {
+        if (w.shapeId !== drag.shapeId) continue;
+        w.ax+=dx; w.ay+=dy; w.bx+=dx; w.by+=dy;
+        w.shapeCx+=dx; w.shapeCy+=dy;
+      }
+      drag.lastX=x; drag.lastY=y;
+      draw(); return;
+    }
+    if(drag.kind==='shapeScale'){
+      const newDist = Math.max(5, Math.hypot(x - drag.cx, y - drag.cy));
+      const scale = newDist / drag.origDist;
+      for (const ow of drag.origWalls) {
+        const w = walls[ow.idx]; if (!w) continue;
+        w.ax = drag.cx + (ow.ax - drag.cx) * scale;
+        w.ay = drag.cy + (ow.ay - drag.cy) * scale;
+        w.bx = drag.cx + (ow.bx - drag.cx) * scale;
+        w.by = drag.cy + (ow.by - drag.cy) * scale;
+      }
+      draw(); return;
+    }
+  });
+
+  canvas.addEventListener('mouseup', ev => {
+    if(wallDraft){
+      const len=Math.hypot(wallDraft.bx-wallDraft.ax,wallDraft.by-wallDraft.ay);
+      if(len>4) walls.push({...wallDraft});
+      wallDraft=null; drag=null; draw(); return;
+    }
+    drag=null; syncWallProps(); draw();
+  });
+
+  canvas.addEventListener('mouseenter',()=>cursorCoords.classList.add('visible'));
+  canvas.addEventListener('mouseleave',()=>{
+    cursorCoords.classList.remove('visible');
+    hoveredWallIndex = null;
+    draw();
+  });
+
+  // ── Mode management ──────────────────────────────────────────────────────
+  function setMode(m) {
+    mode=m;
+    if (m !== 'editWall') selectWall(null);
+    canvas.style.cursor = m==='deleteWall'?'not-allowed':m==='placeShape'?'crosshair':m==='drawWall'?'crosshair':'default';
+    document.getElementById('modeDrawWall').style.outline  = m==='drawWall'  ?'2px solid #3a5878':'none';
+    document.getElementById('modeEditWall').style.outline  = m==='editWall'  ?'2px solid #3a5878':'none';
+    document.getElementById('modeDeleteWall').style.outline= m==='deleteWall'?'2px solid #3a5878':'none';
+    const labels = {drawWall:'Draw Wall mode',editWall:'Edit mode — drag walls/endpoints',deleteWall:'Delete — click a wall to remove',placeShape:`Place ${activeShape||''} — click canvas`};
+    modeLabel.textContent = labels[m] || m;
+    if(m!=='placeShape'){ document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active')); }
+  }
+
+  document.getElementById('modeDrawWall').addEventListener('click',  ()=>setMode('drawWall'));
+  document.getElementById('modeEditWall').addEventListener('click',  ()=>setMode('editWall'));
+  document.getElementById('modeDeleteWall').addEventListener('click',()=>setMode('deleteWall'));
+  document.getElementById('modeUndo').addEventListener('click', ()=>{ if(walls.length){walls.pop();draw();} });
+  document.getElementById('modeClear').addEventListener('click',()=>{ if(confirm('Clear all walls?')){walls=[];draw();} });
+
+  // ── Shape buttons ────────────────────────────────────────────────────────
+  const SHAPE_LABELS = {square:'Square',rectangle:'Rectangle',triangle:'Triangle',circle:'Circle',lshape:'L-Shape',polygon:'Polygon'};
+
+  document.querySelectorAll('.shape-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const shape = btn.dataset.shape;
+      // Show/hide param sections
+      document.querySelectorAll('.param-section').forEach(s=>s.classList.remove('visible'));
+      document.getElementById('params-'+shape).classList.add('visible');
+      // Activate button
+      document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      activeShape = shape;
+      shapeHint.textContent = `${SHAPE_LABELS[shape]} selected — click canvas to place.`;
+      setMode('placeShape');
+    });
+  });
+
+  // Manual place button
+  document.getElementById('placeShapeManualBtn').addEventListener('click', () => {
+    if(!activeShape){ alert('Select a shape first.'); return; }
+    const cx = parseFloat(document.getElementById('shape-cx').value)||W/2;
+    const cy = parseFloat(document.getElementById('shape-cy').value)||H/2;
+    walls.push(...generateSegs(activeShape, cx, cy));
+    activeShape = null;
+    document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active'));
+    setMode('drawWall');
+    draw();
+  });
+
+  // ── Wall properties panel wiring ─────────────────────────────────────────
+  // Direct coordinate edits
+  [['wp-ax','ax'],['wp-ay','ay'],['wp-bx','bx'],['wp-by','by']].forEach(([id,prop]) => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (selectedWallIndex === null) return;
+      const w = walls[selectedWallIndex]; if (!w) return;
+      const val = parseFloat(document.getElementById(id).value);
+      if (Number.isFinite(val)) { w[prop] = val; syncWallProps(); draw(); }
+    });
+  });
+
+  // Length — keeps Start (A) fixed, moves End (B)
+  wpLength.addEventListener('input', () => {
+    if (selectedWallIndex === null) return;
+    const w = walls[selectedWallIndex]; if (!w) return;
+    const newLen = parseFloat(wpLength.value); if (!Number.isFinite(newLen) || newLen <= 0) return;
+    const dx = w.bx-w.ax, dy = w.by-w.ay, oldLen = Math.hypot(dx,dy) || 1;
+    w.bx = w.ax + (dx/oldLen)*newLen; w.by = w.ay + (dy/oldLen)*newLen;
+    syncWallProps(); draw();
+  });
+
+  // Angle — keeps Start (A) fixed, rotates End (B) around A
+  wpAngle.addEventListener('input', () => {
+    if (selectedWallIndex === null) return;
+    const w = walls[selectedWallIndex]; if (!w) return;
+    const newAng = parseFloat(wpAngle.value); if (!Number.isFinite(newAng)) return;
+    const len = Math.hypot(w.bx-w.ax, w.by-w.ay);
+    w.bx = w.ax + Math.cos(rad(newAng))*len; w.by = w.ay + Math.sin(rad(newAng))*len;
+    syncWallProps(); draw();
+  });
+
+  // Rotate 90° around midpoint
+  document.getElementById('wp-rot90').addEventListener('click', () => {
+    if (selectedWallIndex === null) return;
+    rotateWallAroundMidpoint(selectedWallIndex, 90); syncWallProps(); draw();
+  });
+  document.getElementById('wp-rot-90').addEventListener('click', () => {
+    if (selectedWallIndex === null) return;
+    rotateWallAroundMidpoint(selectedWallIndex, -90); syncWallProps(); draw();
+  });
+
+  // Extend from start / end
+  document.getElementById('wp-applyExt').addEventListener('click', () => {
+    if (selectedWallIndex === null) return;
+    const w = walls[selectedWallIndex]; if (!w) return;
+    const extA = parseFloat(document.getElementById('wp-extA').value) || 0;
+    const extB = parseFloat(document.getElementById('wp-extB').value) || 0;
+    const dx = w.bx-w.ax, dy = w.by-w.ay, len = Math.hypot(dx,dy) || 1;
+    const ux = dx/len, uy = dy/len;
+    // Extend from start: move A in the direction away from B (i.e., -u)
+    w.ax -= ux*extA; w.ay -= uy*extA;
+    // Extend from end: move B in the direction away from A (i.e., +u)
+    w.bx += ux*extB; w.by += uy*extB;
+    syncWallProps(); draw();
+  });
+
+  // Deselect button
+  document.getElementById('wp-deselect').addEventListener('click', () => selectWall(null));
+
+  // Sync panel when drag ends on a selected wall
+  // (handled in mouseup — syncWallProps called after drag)
+
+  // ── Wall config inputs ───────────────────────────────────────────────────
+  const wallAxEl=document.getElementById('wallAx'), wallAyEl=document.getElementById('wallAy');
+  const wallBxEl=document.getElementById('wallBx'), wallByEl=document.getElementById('wallBy');
+  const wallAngleEl=document.getElementById('wallAngle'), wallLengthEl=document.getElementById('wallLength');
+
+  document.getElementById('addWallBtn').addEventListener('click', ()=>{
+    const ax=parseFloat(wallAxEl.value),ay=parseFloat(wallAyEl.value);
+    const bx=parseFloat(wallBxEl.value),by=parseFloat(wallByEl.value);
+    if([ax,ay,bx,by].every(Number.isFinite)&&Math.hypot(bx-ax,by-ay)>1){ walls.push({ax,ay,bx,by}); draw(); }
+  });
+  document.getElementById('addWallPolarBtn').addEventListener('click', ()=>{
+    const ax=parseFloat(wallAxEl.value),ay=parseFloat(wallAyEl.value);
+    const angle=parseFloat(wallAngleEl.value),length=parseFloat(wallLengthEl.value);
+    if([ax,ay,angle,length].every(Number.isFinite)&&length>1){
+      const ar=rad(angle);
+      walls.push({ax,ay,bx:ax+Math.cos(ar)*length,by:ay+Math.sin(ar)*length});
+      wallBxEl.value=(ax+Math.cos(ar)*length).toFixed(1);
+      wallByEl.value=(ay+Math.sin(ar)*length).toFixed(1);
+      draw();
+    }
+  });
+  function updatePolarFromCartesian(){
+    const ax=parseFloat(wallAxEl.value),ay=parseFloat(wallAyEl.value);
+    const bx=parseFloat(wallBxEl.value),by=parseFloat(wallByEl.value);
+    if([ax,ay,bx,by].every(Number.isFinite)){
+      wallAngleEl.value=norm360(deg(Math.atan2(by-ay,bx-ax))).toFixed(1);
+      wallLengthEl.value=Math.hypot(bx-ax,by-ay).toFixed(1);
+    }
+  }
+  function updateCartesianFromPolar(){
+    const ax=parseFloat(wallAxEl.value),ay=parseFloat(wallAyEl.value);
+    const angle=parseFloat(wallAngleEl.value),length=parseFloat(wallLengthEl.value);
+    if([ax,ay,angle,length].every(Number.isFinite)){
+      const ar=rad(angle);
+      wallBxEl.value=(ax+Math.cos(ar)*length).toFixed(1);
+      wallByEl.value=(ay+Math.sin(ar)*length).toFixed(1);
+    }
+  }
+  [wallAxEl,wallAyEl,wallBxEl,wallByEl].forEach(el=>el.addEventListener('input',updatePolarFromCartesian));
+  [wallAngleEl,wallLengthEl].forEach(el=>el.addEventListener('input',updateCartesianFromPolar));
+
+  gridSel.addEventListener('input', draw);
+
+  // Redraw preview when shape params change
+  document.querySelectorAll('.param-section input').forEach(el=>el.addEventListener('input', ()=>{ if(mode==='placeShape') draw(); }));
+
+  // ── File ─────────────────────────────────────────────────────────────────
+  document.getElementById('saveJsonBtn').addEventListener('click', ()=>{
+    const blob=new Blob([JSON.stringify({version:1,walls},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`floorplan_${Date.now()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  });
+  const loadInput=document.getElementById('loadJsonInput');
+  document.getElementById('loadJsonBtn').addEventListener('click',()=>loadInput.click());
+  loadInput.addEventListener('change',ev=>{
+    const file=ev.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const data=JSON.parse(e.target.result);
+        if(Array.isArray(data.walls)){walls=data.walls;draw();}
+        else alert('Invalid floorplan JSON');
+      }catch{alert('Could not parse JSON file');}
+      loadInput.value='';
+    };
+    reader.readAsText(file);
+  });
+
+  setMode('drawWall');
+  resize();
+})();
+</script>
+</body></html>
