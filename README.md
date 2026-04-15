@@ -95,25 +95,37 @@ python raytrace.py heatmap --help
 
 ## Input Data Format
 
+### What is an exhaustive beam sweep?
+
+An **exhaustive beam sweep** is a measurement procedure in which the TX (transmitter) and RX (receiver) antennas systematically step through every combination of their beam directions. Both antennas used here are phased-array mmWave radios, each capable of forming **63 discrete beams** spanning –45° to +45° in roughly 1.5° steps.
+
+For each of the 63 TX beams, the RX cycles through all 63 of its own beams — yielding **63 × 63 = 3,969 unique TX/RX beam pair measurements**. This exhaustive approach captures the full spatial signature of the channel: which beam directions produce the strongest link, where specular reflections contribute, and how link quality degrades as either antenna steers away from the optimal direction.
+
+The result of one complete sweep is a single `snr_data.csv` file.
+
+---
+
 ### `snr_data.csv`
 
-No header row. Four comma-separated columns:
+No header row. Four comma-separated columns per measurement:
 
 ```
 sample_size, tx_beam_index, rx_beam_index, snr_db
 2000, 0, 0, 7.094
 2000, 0, 1, 7.185
+2000, 0, 2, 6.831
 ...
+2000, 62, 62, 8.103
 ```
 
-| Column | Description |
-|--------|-------------|
-| `sample_size` | Number of IQ samples collected per beam pair (e.g. 2000) |
-| `tx_beam_index` | TX beam index, integer 0–62 |
-| `rx_beam_index` | RX beam index, integer 0–62 |
-| `snr_db` | Measured SNR in dB |
+| Column | Type | Description |
+|--------|------|-------------|
+| `sample_size` | integer | Number of IQ samples collected at this beam pair before computing SNR. Higher values give more reliable estimates. Typically 2000. |
+| `tx_beam_index` | integer (0–62) | Index of the TX beam direction. Index 0 corresponds to +45° and index 62 to –45°, stepping left to right in ~1.5° increments. |
+| `rx_beam_index` | integer (0–62) | Index of the RX beam direction. Index 0 corresponds to –45° and index 62 to +45°, stepping right to left in ~1.5° increments. |
+| `snr_db` | float | Signal-to-Noise Ratio measured at this TX/RX beam pair, in decibels (dB). Higher values indicate a stronger, cleaner link. |
 
-A complete sweep contains **63 × 63 = 3,969 rows**.
+A complete sweep contains **3,969 rows** (one per TX/RX beam pair combination).
 
 ---
 
