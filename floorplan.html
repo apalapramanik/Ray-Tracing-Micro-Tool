@@ -292,53 +292,170 @@
 </div>
 
 <script>
+/*
+ * ============================================================================
+ * Floorplan Editor — JavaScript Architecture
+ * ============================================================================
+ *
+ * OVERVIEW
+ * --------
+ * This is a fully self-contained Canvas 2D floor plan editor. It lets the
+ * user draw walls (line segments), place pre-built shapes (squares, rectangles,
+ * triangles, circles, L-shapes, polygons), edit and delete them, then export
+ * the result as a JSON file consumed by the Ray Tracing Micro Tool.
+ *
+ * COORDINATE SYSTEM
+ * -----------------
+ * All coordinates are in canvas pixel space (2 px = 1 inch at the default scale).
+ * X increases rightward (+X = East), Y increases downward (+Y = South).
+ * The origin is wherever the user places it — by convention the NH lab uses
+ * (200, 200) as the top-left corner of the outer room bounding box.
+ *
+ * JSON OUTPUT FORMAT
+ * ------------------
+ * The exported JSON contains:
+ *   {
+ *     "tx":    { "x": ..., "y": ..., "boresight_deg": ... },
+ *     "rx":    { "x": ..., "y": ..., "boresight_deg": ... },
+ *     "walls": [ { "ax": ..., "ay": ..., "bx": ..., "by": ..., "_label": ... }, ... ]
+ *   }
+ * Each wall is a line segment from point A to point B.
+ * Shapes are decomposed into their individual edge segments before export.
+ *
+ * DATA MODEL
+ * ----------
+ * `walls` — the single source of truth. An array of segment objects:
+ *   {
+ *     ax, ay, bx, by       — start and end coordinates of the segment
+ *     shapeId?             — if this segment belongs to a shape, its shape ID
+ *     shapeType?           — 'square' | 'rectangle' | 'triangle' | 'circle' | 'lshape' | 'polygon'
+ *     shapeCx?, shapeCy?   — centre of the shape (for move/scale handles)
+ *     shapeParams?         — the parameters used to generate this shape
+ *   }
+ * Plain walls (drawn with the Draw mode) have no shapeId.
+ *
+ * EDITOR MODES
+ * ------------
+ *   drawWall    — click to start a wall, click again to finish it
+ *   editWall    — drag endpoints or bodies to move; shapes have move+scale handles
+ *   deleteWall  — click any wall or shape to remove it
+ *   placeShape  — click the canvas to drop the selected shape at that location
+ *
+ * KEY SECTIONS IN THIS FILE
+ * -------------------------
+ *   1. State variables          — all mutable editor state in one place
+ *   2. Helpers                  — math utilities (rad/deg, clamp, etc.)
+ *   3. Canvas sizing            — retina-aware resize logic
+ *   4. Shape generation         — generateSegs() builds segment arrays from shape params
+ *   5. Wall properties panel    — syncs the left-panel inputs with the selected wall
+ *   6. Hit testing              — findWallAtPoint() for mouse interaction
+ *   7. Drawing                  — draw() re-renders the whole canvas each frame
+ *   8. Mouse events             — mousedown/mousemove/mouseup/wheel handlers
+ *   9. Button event handlers    — wires up all the left-panel buttons
+ *  10. File I/O                 — saveJsonBtn (export) and loadJsonBtn (import)
+ *  11. TX/RX position controls  — syncs numeric inputs with tx/rx marker positions
+ *
+ * HOW TO CUSTOMISE
+ * ----------------
+ *   - Add a new shape type: add a button in the HTML, a case in generateSegs(),
+ *     a params section div, and a tooltip case in drawWallTooltip().
+ *   - Change the default grid size: edit the <select id="grid"> default option.
+ *   - Change wall stroke width: edit ctx.lineWidth in drawWall().
+ *   - Change wall colour: edit ctx.strokeStyle in drawWall().
+ *   - Change the colour scheme: edit the CSS :root variables at the top of <style>.
+ *   - Add a new export format: copy saveJsonBtn's handler and transform `walls`.
+ *
+ * © 2025 Apala Pramanik · Concept: Dr. Mehmet C. Vuran · Built with Claude (Anthropic)
+ * ============================================================================
+ */
+
 (() => {
+  // DOM references — cached once at startup for performance
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
-  const gridSel     = document.getElementById('grid');
-  const statsEl     = document.getElementById('stats');
-  const gridScaleEl = document.getElementById('gridScale');
-  const cursorCoords= document.getElementById('cursorCoords');
-  const modeLabel   = document.getElementById('modeLabel');
-  const shapeHint   = document.getElementById('shapeHint');
+  const gridSel      = document.getElementById('grid');        // grid spacing selector
+  const statsEl      = document.getElementById('stats');       // "Walls: N" counter
+  const gridScaleEl  = document.getElementById('gridScale');   // scale badge value
+  const cursorCoords = document.getElementById('cursorCoords');// floating coordinate tooltip
+  const modeLabel    = document.getElementById('modeLabel');   // mode badge text
+  const shapeHint    = document.getElementById('shapeHint');   // shape placement hint
 
-  // ── State ────────────────────────────────────────────────────────────────
-  let walls = [];
-  let mode  = 'drawWall';       // 'drawWall' | 'editWall' | 'deleteWall' | 'placeShape'
-  let wallDraft = null;
-  let drag  = null;
-  let activeShape = null;       // 'square' | 'rectangle' | 'triangle' | 'circle' | 'lshape' | 'polygon'
-  let mousePos = { x: 0, y: 0 };
-  let hoveredWallIndex = null;
-  let shapeCounter = 0;
-  let selectedWallIndex = null;
+  // ==========================================================================
+  // SECTION 1 — EDITOR STATE
+  // ==========================================================================
+  // All mutable state lives here. Avoid creating state variables elsewhere
+  // so that the editor's condition is always easy to inspect in one place.
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  const rad = d => d * Math.PI / 180;
-  const deg = r => r * 180 / Math.PI;
-  const norm360 = d => ((d % 360) + 360) % 360;
-  const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
+  let walls = [];             // Array of all wall/shape segments (see Data Model above)
+  let mode  = 'drawWall';    // Current editor mode: 'drawWall' | 'editWall' | 'deleteWall' | 'placeShape'
+  let wallDraft = null;       // The in-progress wall being drawn (null when not drawing)
+  let drag  = null;           // Active drag operation: { kind, wallIndex, ... } or null
+  let activeShape = null;     // Shape type selected for placement: 'square' | 'rectangle' | etc., or null
+  let mousePos = { x: 0, y: 0 }; // Last known mouse position in canvas space
+  let hoveredWallIndex = null;    // Index of wall under the cursor (for highlight + tooltip)
+  let shapeCounter = 0;           // Auto-incrementing ID for shape groups
+  let selectedWallIndex = null;   // Index of the wall selected in Edit mode (plain walls only)
+
+  // ==========================================================================
+  // SECTION 2 — MATH HELPERS
+  // ==========================================================================
+
+  const rad = d => d * Math.PI / 180;           // degrees → radians
+  const deg = r => r * 180 / Math.PI;           // radians → degrees
+  const norm360 = d => ((d % 360) + 360) % 360; // normalise angle to [0, 360)
+  const clamp = (v,a,b) => Math.max(a, Math.min(b,v)); // clamp v to [a, b]
+
+  // Read a numeric input field by its element ID, returning 0 if empty/invalid
   const v = id => parseFloat(document.getElementById(id).value) || 0;
 
-  // ── Canvas sizing ────────────────────────────────────────────────────────
-  let W, H;
+  // ==========================================================================
+  // SECTION 3 — CANVAS SIZING (retina-aware)
+  // ==========================================================================
+  // The canvas is scaled by devicePixelRatio so it renders crisp on HiDPI
+  // (Retina) displays. All drawing coordinates are in CSS pixels (W × H);
+  // the DPR scaling is handled by ctx.setTransform().
+
+  let W, H; // Current CSS pixel dimensions of the canvas
+
   function resize() {
-    const DPR = window.devicePixelRatio || 1;
+    const DPR = window.devicePixelRatio || 1; // 2 on Retina, 1 on standard displays
     const rect = canvas.parentElement.getBoundingClientRect();
     W = rect.width; H = rect.height;
-    canvas.width  = W * DPR; canvas.height = H * DPR;
-    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+
+    // Physical pixel dimensions = CSS pixels × DPR
+    canvas.width  = W * DPR;
+    canvas.height = H * DPR;
+
+    // CSS size stays the same — the canvas just has more physical pixels
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+
+    // Scale the drawing context so 1 unit = 1 CSS pixel everywhere else
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     draw();
   }
   window.addEventListener('resize', resize);
 
+  // Convert a MouseEvent's page coordinates to canvas-local CSS pixel coordinates
   function canvasToLocal(ev) {
     const r = canvas.getBoundingClientRect();
     return { x: ev.clientX - r.left, y: ev.clientY - r.top };
   }
 
-  // ── Shape generation ─────────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 4 — SHAPE GENERATION
+  // ==========================================================================
+  // generateSegs(type, cx, cy) returns an array of {ax,ay,bx,by} segments
+  // centred at (cx, cy). Each shape type is decomposed into edges so the
+  // rest of the editor only needs to handle line segments.
+  //
+  // HOW TO ADD A NEW SHAPE:
+  //   1. Add a button in the HTML <div class="shape-btns">
+  //   2. Add a <div class="param-section" id="params-myshape"> for its inputs
+  //   3. Add a case in getShapeParams() to read those inputs
+  //   4. Add a block in generateSegs() to compute the vertices
+  //   5. Add a case in drawWallTooltip() for the hover tooltip
+
   function getShapeParams(type) {
     if (type === 'square')    return { side: v('sq-side'), rot: v('sq-rot') };
     if (type === 'rectangle') return { width: v('rect-w'), height: v('rect-h'), rot: v('rect-rot') };
@@ -353,7 +470,9 @@
     return {};
   }
 
-  // Returns array of {ax,ay,bx,by, + shape metadata} segments centred at (cx,cy)
+  // Returns array of wall segments {ax,ay,bx,by, + shape metadata} centred at (cx,cy)
+  // Each segment is tagged with shapeId, shapeType, shapeCx/Cy, and shapeParams
+  // so the editor can treat all segments of a shape as a single unit.
   function generateSegs(type, cx, cy) {
     const segs = [];
 
@@ -453,10 +572,15 @@
     return segs.map(s => ({ ...s, shapeId: id, shapeType: type, shapeCx: cx, shapeCy: cy, shapeParams: params }));
   }
 
-  // ── Shape helpers ────────────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 5 — SHAPE UTILITY HELPERS
+  // ==========================================================================
+
+  // Return all wall segments belonging to a given shape ID
   function getShapeWalls(sid) { return walls.filter(w => w.shapeId === sid); }
 
-  // Max distance from stored center to any vertex (used to position scale handle)
+  // Compute the furthest distance from the shape's stored centre to any of its
+  // vertices. This determines where the scale handle is drawn (just outside the shape).
   function shapeMaxRadius(sid, cx, cy) {
     let r = 0;
     for (const w of getShapeWalls(sid)) {
@@ -465,19 +589,28 @@
     return r || 30;
   }
 
-  // ── Wall properties panel ────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 6 — WALL PROPERTIES PANEL
+  // ==========================================================================
+  // Shows start/end coordinates, length, and angle for the selected plain wall.
+  // Hidden when a shape segment is selected (shapes use move/scale handles instead).
+  // HOW TO CUSTOMISE: add more inputs here and update syncWallProps() to populate them.
+
   const wallPropsPanel = document.getElementById('wallPropsPanel');
   const wpAx = document.getElementById('wp-ax'), wpAy = document.getElementById('wp-ay');
   const wpBx = document.getElementById('wp-bx'), wpBy = document.getElementById('wp-by');
   const wpLength = document.getElementById('wp-length'), wpAngle = document.getElementById('wp-angle');
 
+  // Select a wall by index and show the properties panel if it's a plain wall
   function selectWall(idx) {
     selectedWallIndex = idx;
+    // Shape segments don't use the properties panel — they have visual handles instead
     if (idx === null || walls[idx]?.shapeId) { wallPropsPanel.style.display = 'none'; return; }
     wallPropsPanel.style.display = 'block';
     syncWallProps();
   }
 
+  // Push the selected wall's current values into the left-panel input fields
   function syncWallProps() {
     if (selectedWallIndex === null) return;
     const w = walls[selectedWallIndex]; if (!w) return;
@@ -487,10 +620,12 @@
     const ang = norm360(deg(Math.atan2(w.by-w.ay, w.bx-w.ax)));
     wpLength.value = len.toFixed(1);
     wpAngle.value  = ang.toFixed(1);
+    // Reset extension fields each time a wall is selected
     document.getElementById('wp-extA').value = 0;
     document.getElementById('wp-extB').value = 0;
   }
 
+  // Rotate a single wall segment around its own midpoint by angleDeg degrees
   function rotateWallAroundMidpoint(idx, angleDeg) {
     const w = walls[idx]; if (!w) return;
     const mx = (w.ax+w.bx)/2, my = (w.ay+w.by)/2;
@@ -500,20 +635,38 @@
     w.ax=na.x; w.ay=na.y; w.bx=nb.x; w.by=nb.y;
   }
 
-  // ── Hit testing ──────────────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 7 — HIT TESTING
+  // ==========================================================================
+  // These functions determine which wall/endpoint is under the mouse cursor.
+  // Endpoints are tested first (higher priority than body) so the user can
+  // always grab an endpoint even when it lies on top of another wall's body.
+  //
+  // HOW TO CUSTOMISE: increase the radius constants (10, 8) to make walls
+  // easier to click on smaller screens or with a coarse pointer.
+
+  // True if point (px,py) is within radius r of circle centre (cx,cy)
   function hitCircle(px,py,cx,cy,r) { return (px-cx)**2+(py-cy)**2<=r*r; }
 
+  // True if the mouse is within 10px of endpoint 'a' or 'b' of wall[i]
   function hitTestWallEndpoint(mx,my,i,ep) {
     const w=walls[i]; if(!w) return false;
     return hitCircle(mx,my, ep==='a'?w.ax:w.bx, ep==='a'?w.ay:w.by, 10);
   }
+
+  // True if the mouse is within 8px of the nearest point on the wall body
+  // Uses parametric projection: find t∈[0,1] on the segment closest to (mx,my)
   function hitTestWallBody(mx,my,i) {
     const w=walls[i]; if(!w) return false;
     const dx=w.bx-w.ax, dy=w.by-w.ay, lsq=dx*dx+dy*dy;
-    if(lsq===0) return hitCircle(mx,my,w.ax,w.ay,10);
+    if(lsq===0) return hitCircle(mx,my,w.ax,w.ay,10); // degenerate zero-length wall
     const t=clamp(((mx-w.ax)*dx+(my-w.ay)*dy)/lsq,0,1);
     return hitCircle(mx,my,w.ax+t*dx,w.ay+t*dy,8);
   }
+
+  // Find the first wall (or endpoint) under (mx,my).
+  // Returns { wallIndex, type: 'endpoint'|'body', endpoint?: 'a'|'b' } or null.
+  // Endpoint pass runs first so endpoints always take priority over bodies.
   function findWallAtPoint(mx,my) {
     for(let i=0;i<walls.length;i++){
       if(hitTestWallEndpoint(mx,my,i,'a')) return{wallIndex:i,type:'endpoint',endpoint:'a'};
@@ -525,7 +678,30 @@
     return null;
   }
 
-  // ── Drawing ──────────────────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 8 — DRAWING
+  // ==========================================================================
+  // draw() is the single render function — it clears the canvas and redraws
+  // everything from scratch on every frame. Called after any state change.
+  //
+  // Render order (back to front):
+  //   1. Background gradient
+  //   2. Grid lines
+  //   3. Coordinate axes (+X, +Y)
+  //   4. All walls (full opacity)
+  //   5. Wall draft (in-progress wall, semi-transparent)
+  //   6. Selected wall highlight
+  //   7. Hovered wall/shape highlight + tooltip
+  //   8. Shape move/scale handles (edit mode only)
+  //   9. Shape preview (place mode only)
+  //  10. Drag measurement overlay
+  //
+  // HOW TO CUSTOMISE:
+  //   - Change wall colour: edit ctx.strokeStyle in drawWall()
+  //   - Change wall thickness: edit ctx.lineWidth in drawWall()
+  //   - Change highlight colour: edit ctx.strokeStyle in the hover block in draw()
+  //   - Add new overlays: append drawing calls at the end of draw()
+
   function drawGrid(step) {
     if(!step) return;
     ctx.save();
@@ -764,7 +940,22 @@
     gridScaleEl.textContent=gv?`${gv} px`:'Off';
   }
 
-  // ── Mouse events ─────────────────────────────────────────────────────────
+  // ==========================================================================
+  // SECTION 9 — MOUSE EVENT HANDLERS
+  // ==========================================================================
+  // Three canvas listeners handle all interaction:
+  //   mousedown  — start draw / start drag / place shape / delete
+  //   mousemove  — update draft wall / move drag / update hover state
+  //   mouseup    — commit drag
+  //
+  // HOW TO CUSTOMISE:
+  //   - Add snap-to-grid: in mousemove, round (x,y) to the nearest grid multiple
+  //     before using them. Example: x = Math.round(x / gridStep) * gridStep
+  //   - Add snap-to-endpoint: in mousemove, search walls for any endpoint within
+  //     a threshold distance and snap to it.
+  //   - Add touch support: mirror these handlers with touchstart/touchmove/touchend,
+  //     using ev.touches[0].clientX/Y instead of ev.clientX/Y.
+
   canvas.addEventListener('mousedown', ev => {
     const {x,y}=canvasToLocal(ev);
 
