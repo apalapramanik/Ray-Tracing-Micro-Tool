@@ -16,7 +16,7 @@ Usage:
 The output HTML is saved as:
     <experiment_directory>/<folder_name>.html
 
-TX/RX positions are read from nh_2ndfloor_floorplan.json (keys "tx" and "rx" with
+TX/RX positions are read from floorplan.json (keys "tx" and "rx" with
 fields x, y, boresight_deg).  Edit that file before generating the report.
 """
 

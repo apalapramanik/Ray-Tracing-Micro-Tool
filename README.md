@@ -61,7 +61,7 @@ python raytrace.py report path/to/my_experiment/
 
 The tool will:
 1. Read `snr_data.csv` from the experiment folder
-2. Load the floor plan (default: `nh_2ndfloor_floorplan.json`)
+2. Load the floor plan (default: `floorplan.json`)
 3. Save a self-contained `my_experiment.html` inside the experiment folder
 4. Open it automatically in your browser
 
@@ -214,7 +214,7 @@ You can also create or edit the JSON file by hand. The format is:
 | `walls[].bx/by` | Wall end point (pixels) |
 | `_label` | Optional human-readable description, ignored by the tool |
 
-The included `nh_2ndfloor_floorplan.json` is pre-configured for the NH Building 2nd-floor lab.  
+The included `floorplan.json` is pre-configured for the NH Building 2nd-floor lab.  
 **Create a new floor plan before running experiments in a different space.**
 
 ---
@@ -238,7 +238,7 @@ my_experiment/
 | `ModuleNotFoundError` | Run `pip install -r requirements.txt` |
 | `snr_data.csv not found` | Verify the folder path passed to the command |
 | Report opens blank | Confirm `snr_data.csv` has 3,969 rows (63×63 beam pairs) |
-| Floor plan not showing | Use `--floorplan` or verify `nh_2ndfloor_floorplan.json` is present |
+| Floor plan not showing | Use `--floorplan` or verify `floorplan.json` is present |
 
 ---
 

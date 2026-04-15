@@ -77,14 +77,13 @@ def _default_floorplan() -> Path:
     Find the default floorplan JSON file next to this script.
 
     The function tries several common filenames in order:
-      1. nh_2ndfloor_floorplan.json  (the repo default)
-      2. floorplan.json              (generic fallback)
-      3. control_plan.json           (legacy name)
+      1. floorplan.json     (the repo default)
+      2. control_plan.json  (legacy name)
 
     Returns
     -------
     Path
-        Path to the first matching file, or nh_2ndfloor_floorplan.json
+        Path to the first matching file, or floorplan.json
         (even if it doesn't exist — load_floorplan() handles the missing
         file gracefully by returning an empty floor plan).
 
@@ -95,13 +94,13 @@ def _default_floorplan() -> Path:
     here = Path(__file__).parent
 
     # Try each candidate filename in priority order
-    for name in ("nh_2ndfloor_floorplan.json", "floorplan.json", "control_plan.json"):
+    for name in ("floorplan.json", "control_plan.json"):
         candidate = here / name
         if candidate.exists():
             return candidate
 
     # None found — return the default name so load_floorplan() can warn gracefully
-    return here / "nh_2ndfloor_floorplan.json"
+    return here / "floorplan.json"
 
 
 # =============================================================================
@@ -263,7 +262,7 @@ Examples:
         "--floorplan",
         default=None,
         metavar="PATH",
-        help="Path to floorplan JSON (default: nh_2ndfloor_floorplan.json next to this script). "
+        help="Path to floorplan JSON (default: floorplan.json next to this script). "
              "Create one with floorplan.html.",
     )
     # Wire this subcommand to its handler function
