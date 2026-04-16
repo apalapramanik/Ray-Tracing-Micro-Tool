@@ -272,4 +272,4 @@ Development and implementation by **Apala Pramanik**, with assistance from **[Cl
 
 ---
 
-<sub>© 2025 Apala Pramanik · Concept by Dr. Mehmet C. Vuran (University of Nebraska–Lincoln) · Built with Claude by Anthropic · All rights reserved.</sub>
+<sub>© 2026 Apala Pramanik · Concept by Dr. Mehmet C. Vuran (University of Nebraska–Lincoln) · Built with Claude by Anthropic · All rights reserved.</sub>
