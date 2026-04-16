@@ -57,7 +57,7 @@ git clone https://github.com/apalapramanik/Ray-Tracing-Micro-Tool.git
 cd Ray-Tracing-Micro-Tool
 
 # 2. Create and activate a virtual environment (recommended)
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate        # macOS / Linux
 # .venv\Scripts\activate         # Windows
 
